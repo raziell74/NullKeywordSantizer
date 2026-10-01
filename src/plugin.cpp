@@ -1,5 +1,6 @@
 #include "PCH.h"
 
+#include "Keywords/Sanitizer.h"
 #include "Settings/Settings.h"
 
 SKSE_EXPORT constinit SKSE::PluginVersionData SKSEPlugin_Version = []() noexcept {
@@ -25,6 +26,62 @@ SKSE_EXPORT bool SKSEPlugin_Query(SKSE::QueryInterface*, SKSE::PluginInfo* plugi
 	return true;
 }
 
+namespace
+{
+	void QueueScan(std::string_view a_reason)
+	{
+		const auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			SKSE::log::warn("Keyword scan ({}) skipped; task interface is not ready", a_reason);
+			return;
+		}
+
+		tasks->AddTask([a_reason] {
+			Keywords::ScanItems(a_reason);
+		});
+	}
+
+	void OnSKSEMessage(SKSE::MessagingInterface::Message* a_message)
+	{
+		if (!a_message || !Settings::Get().enabled) {
+			return;
+		}
+
+		switch (a_message->type) {
+		case SKSE::MessagingInterface::kDataLoaded:
+			QueueScan("kDataLoaded"sv);
+			break;
+		case SKSE::MessagingInterface::kPostLoadGame:
+			if (!a_message->data || *static_cast<const bool*>(a_message->data)) {
+				QueueScan("kPostLoadGame"sv);
+			}
+			break;
+		case SKSE::MessagingInterface::kNewGame:
+			QueueScan("kNewGame"sv);
+			break;
+		default:
+			break;
+		}
+	}
+
+	class KeywordDistributionSink final : public RE::BSTEventSink<SKSE::ModCallbackEvent>
+	{
+	public:
+		RE::BSEventNotifyControl ProcessEvent(
+			const SKSE::ModCallbackEvent*           a_event,
+			RE::BSTEventSource<SKSE::ModCallbackEvent>*) override
+		{
+			if (Settings::Get().enabled && a_event &&
+				static_cast<std::string_view>(a_event->eventName) == "KID_KeywordDistributionDone"sv) {
+				Keywords::ScanItems("KID_KeywordDistributionDone"sv);
+			}
+			return RE::BSEventNotifyControl::kContinue;
+		}
+	};
+
+	KeywordDistributionSink g_keywordDistributionSink{};
+}
+
 SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 {
 	// Debug CRT: Module::_instance is not constinit. If any Relocation resolved
@@ -33,6 +90,24 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 	REL::Module::reset();
 	SKSE::Init(a_skse);
 	Settings::Load();
+
+	if (Settings::Get().enabled) {
+		Keywords::InstallCopyHook();
+
+		if (const auto* messaging = SKSE::GetMessagingInterface()) {
+			if (!messaging->RegisterListener(OnSKSEMessage)) {
+				SKSE::log::error("Failed to register SKSE message listener");
+			}
+		} else {
+			SKSE::log::error("SKSE messaging interface is unavailable");
+		}
+
+		if (auto* events = SKSE::GetModCallbackEventSource()) {
+			events->AddEventSink(&g_keywordDistributionSink);
+		} else {
+			SKSE::log::error("SKSE mod callback source is unavailable");
+		}
+	}
 
 	const auto* plugin = SKSE::PluginVersionData::GetSingleton();
 	SKSE::log::info("{} v{} loaded", plugin->GetPluginName(), plugin->GetPluginVersion().string());
