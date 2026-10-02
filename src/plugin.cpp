@@ -52,7 +52,8 @@ namespace
 			QueueScan("kDataLoaded"sv);
 			break;
 		case SKSE::MessagingInterface::kPostLoadGame:
-			if (!a_message->data || *static_cast<const bool*>(a_message->data)) {
+			// SKSE passes the success flag as the pointer value, (void*)result, not a bool*.
+			if (a_message->data) {
 				QueueScan("kPostLoadGame"sv);
 			}
 			break;

@@ -79,23 +79,34 @@ namespace
 
 	void LogRemoval(const RE::BGSKeyword* a_keyword, const RE::TESForm* a_item)
 	{
-		const char* name = a_item ? a_item->GetName() : nullptr;
-		if (!name) {
-			name = "";
+		if (Settings::Get().level > spdlog::level::debug) {
+			return;
 		}
 
-		if (a_keyword) {
-			SKSE::log::debug(
-				"Removed keyword {:08X} from item {:08X} ({})",
-				a_keyword->GetFormID(),
-				a_item ? a_item->GetFormID() : 0,
-				name);
-		} else {
-			SKSE::log::debug(
-				"Removed null keyword from item {:08X} ({})",
-				a_item ? a_item->GetFormID() : 0,
-				name);
+		const auto  itemId = a_item ? a_item->GetFormID() : 0u;
+		const char* itemName = a_item ? a_item->GetName() : nullptr;
+		if (!itemName) {
+			itemName = "";
 		}
+
+		if (!a_keyword) {
+			SKSE::log::debug("Removed null keyword from item {:08X} ({})", itemId, itemName);
+			return;
+		}
+
+		const char* editorId = a_keyword->GetFormEditorID();
+		if (!editorId) {
+			editorId = "";
+		}
+
+		SKSE::log::debug(
+			"Removed keyword {:08X} type {} flags {:08X} editorId '{}' from item {:08X} ({})",
+			a_keyword->GetFormID(),
+			static_cast<std::uint32_t>(a_keyword->GetFormType()),
+			a_keyword->GetFormFlags(),
+			editorId,
+			itemId,
+			itemName);
 	}
 
 	std::uint32_t RemoveBlankKeywords(RE::BGSKeywordForm* a_keywords, const RE::TESForm* a_item)
@@ -469,4 +480,5 @@ namespace Keywords
 		trampoline.write_branch<5>(target, &CopyComponentHook);
 		SKSE::log::info("Hooked BGSKeywordForm::CopyComponent at {:X} ({} bytes)", target, *stolen);
 	}
+
 }
