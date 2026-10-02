@@ -77,35 +77,79 @@ namespace
 			reinterpret_cast<const std::byte*>(a_component) - col->offset);
 	}
 
+	[[nodiscard]] const char* FormTypeLabel(RE::FormType a_type)
+	{
+		switch (a_type) {
+		case RE::FormType::Keyword:
+			return "KYWD";
+		case RE::FormType::Armor:
+			return "ARMO";
+		case RE::FormType::Weapon:
+			return "WEAP";
+		case RE::FormType::Ammo:
+			return "AMMO";
+		case RE::FormType::Misc:
+			return "MISC";
+		case RE::FormType::KeyMaster:
+			return "KEYM";
+		case RE::FormType::SoulGem:
+			return "SLGM";
+		case RE::FormType::Book:
+			return "BOOK";
+		case RE::FormType::Note:
+			return "NOTE";
+		case RE::FormType::AlchemyItem:
+			return "ALCH";
+		case RE::FormType::Ingredient:
+			return "INGR";
+		case RE::FormType::Scroll:
+			return "SCRL";
+		default:
+			return "????";
+		}
+	}
+
 	void LogRemoval(const RE::BGSKeyword* a_keyword, const RE::TESForm* a_item)
 	{
 		if (Settings::Get().level > spdlog::level::debug) {
 			return;
 		}
 
-		const auto  itemId = a_item ? a_item->GetFormID() : 0u;
-		const char* itemName = a_item ? a_item->GetName() : nullptr;
-		if (!itemName) {
-			itemName = "";
+		const auto        itemId = a_item ? a_item->GetFormID() : 0u;
+		const auto        itemType = a_item ? a_item->GetFormType() : RE::FormType::None;
+		const char*       itemName = a_item ? a_item->GetName() : nullptr;
+		if (!itemName || itemName[0] == '\0') {
+			itemName = "<no name>";
 		}
 
 		if (!a_keyword) {
-			SKSE::log::debug("Removed null keyword from item {:08X} ({})", itemId, itemName);
+			SKSE::log::debug(
+				"Removed keyword <none>\n"
+				"    from:  {:08X} ({})\n"
+				"    name:  {}",
+				itemId,
+				FormTypeLabel(itemType),
+				itemName);
 			return;
 		}
 
 		const char* editorId = a_keyword->GetFormEditorID();
-		if (!editorId) {
-			editorId = "";
+		if (!editorId || editorId[0] == '\0') {
+			editorId = "<blank>";
 		}
 
 		SKSE::log::debug(
-			"Removed keyword {:08X} type {} flags {:08X} editorId '{}' from item {:08X} ({})",
+			"Removed keyword {:08X} ({})\n"
+			"    editorID:  {}\n"
+			"    flags:     {:08X}\n"
+			"    from:      {:08X} ({})\n"
+			"    name:      {}",
 			a_keyword->GetFormID(),
-			static_cast<std::uint32_t>(a_keyword->GetFormType()),
-			a_keyword->GetFormFlags(),
+			FormTypeLabel(a_keyword->GetFormType()),
 			editorId,
+			a_keyword->GetFormFlags(),
 			itemId,
+			FormTypeLabel(itemType),
 			itemName);
 	}
 
